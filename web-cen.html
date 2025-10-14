@@ -141,119 +141,147 @@
     <li>Los ejercicios aparecen uno debajo del otro.</li>
     <li>Los alumnos aparecen uno al lado del otro.</li>
     <li>El puntaje se colorea automáticamente: rojo (0), amarillo (1–99), verde (100).</li>
-    <li>Todo se guarda automáticamente en tu navegador (localStorage).</li>
+    <li>Los datos se guardan y sincronizan en la nube (Firebase).</li>
   </ul>
 </footer>
 
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+
 <script>
-const STORAGE_KEY = 'oia_cen_scores_transpuesto';
-let state = { students: [], exercises: [], scores: {} };
-
-function uid(){ return Math.random().toString(36).substr(2,9); }
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function load(){
-  const s = localStorage.getItem(STORAGE_KEY);
-  if(s){ state = JSON.parse(s); }
-}
-
-function colorCell(input){
-  const val = Number(input.value);
-  input.classList.remove('score-0','score-mid','score-100');
-  if(val===0) input.classList.add('score-0');
-  else if(val===100) input.classList.add('score-100');
-  else if(val>0 && val<100) input.classList.add('score-mid');
-}
-
-function build(){
-  const table=document.getElementById('scoreTable');
-  table.innerHTML='';
-  const header=document.createElement('tr');
-  header.appendChild(document.createElement('th')).textContent='Ejercicio / Alumno';
-  state.students.forEach(st=>{
-    const th=document.createElement('th');
-    th.textContent=st.name;
-    header.appendChild(th);
-  });
-  table.appendChild(header);
-
-  state.exercises.forEach(ex=>{
-    const tr=document.createElement('tr');
-    const tdName=document.createElement('td');
-    tdName.className='exercise';
-    tdName.innerHTML=`${ex.name}<br>
-      <a href="${ex.zipLink||'#'}" target="_blank">📦 Código</a> |
-      <a href="${ex.probLink||'#'}" target="_blank">📄 Enunciado</a>`;
-    tr.appendChild(tdName);
-    state.students.forEach(st=>{
-      const td=document.createElement('td');
-      const input=document.createElement('input');
-      input.type='number'; input.min=0; input.max=100;
-      const key=`${st.id}|${ex.id}`;
-      input.value=state.scores[key]??'';
-      colorCell(input);
-      input.oninput=()=>{
-        let v=Number(input.value);
-        if(isNaN(v)) v='';
-        if(v<0) v=0;
-        if(v>100) v=100;
-        state.scores[key]=v;
-        save();
-        colorCell(input);
-      };
-      td.appendChild(input);
-      tr.appendChild(td);
-    });
-    table.appendChild(tr);
-  });
-}
-
-document.getElementById('addExercise').onclick=()=>{
-  const name=document.getElementById('newExercise').value.trim();
-  if(!name) return alert('Nombre del ejercicio requerido');
-  const zip=document.getElementById('zipLink').value.trim();
-  const prob=document.getElementById('probLink').value.trim();
-  state.exercises.push({id:uid(),name,zipLink:zip,probLink:prob});
-  save(); build();
-  document.getElementById('newExercise').value='';
-  document.getElementById('zipLink').value='';
-  document.getElementById('probLink').value='';
-};
-
-document.getElementById('addStudent').onclick=()=>{
-  const name=document.getElementById('newStudent').value.trim();
-  if(!name) return alert('Nombre del alumno requerido');
-  state.students.push({id:uid(),name});
-  save(); build();
-  document.getElementById('newStudent').value='';
-};
-
-document.getElementById('exportBtn').onclick=()=>{
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='puntajes_oia.json';
-  document.body.appendChild(a);a.click();a.remove();
-};
-document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=(e)=>{
-  const f=e.target.files[0];
-  if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{
-    state=JSON.parse(r.result);
-    save(); build();
+  // 🔧 PEGÁ TU CONFIGURACIÓN AQUÍ:
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://TU_PROJECT_ID.firebaseio.com",
+    projectId: "TU_PROJECT_ID",
+    storageBucket: "TU_PROJECT_ID.appspot.com",
+    messagingSenderId: "TU_ID",
+    appId: "TU_APP_ID"
   };
-  r.readAsText(f);
-};
-document.getElementById('clearBtn').onclick=()=>{
-  if(confirm('¿Borrar todos los datos locales?')){
-    localStorage.removeItem(STORAGE_KEY);
-    state={students:[],exercises:[],scores:{}};
-    build();
-  }
-};
 
-load();
-build();
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  let state = { students: [], exercises: [], scores: {} };
+
+  function uid(){ return Math.random().toString(36).substr(2,9); }
+
+  function colorCell(input){
+    const val = Number(input.value);
+    input.classList.remove('score-0','score-mid','score-100');
+    if(val===0) input.classList.add('score-0');
+    else if(val===100) input.classList.add('score-100');
+    else if(val>0 && val<100) input.classList.add('score-mid');
+  }
+
+  function build(){
+    const table=document.getElementById('scoreTable');
+    table.innerHTML='';
+    const header=document.createElement('tr');
+    header.appendChild(document.createElement('th')).textContent='Ejercicio / Alumno';
+    state.students.forEach(st=>{
+      const th=document.createElement('th');
+      th.textContent=st.name;
+      header.appendChild(th);
+    });
+    table.appendChild(header);
+
+    state.exercises.forEach(ex=>{
+      const tr=document.createElement('tr');
+      const tdName=document.createElement('td');
+      tdName.className='exercise';
+      tdName.innerHTML=`${ex.name}<br>
+        <a href="${ex.zipLink||'#'}" target="_blank">📦 Código</a> |
+        <a href="${ex.probLink||'#'}" target="_blank">📄 Enunciado</a>`;
+      tr.appendChild(tdName);
+      state.students.forEach(st=>{
+        const td=document.createElement('td');
+        const input=document.createElement('input');
+        input.type='number'; input.min=0; input.max=100;
+        const key=`${st.id}|${ex.id}`;
+        input.value=state.scores[key]??'';
+        colorCell(input);
+        input.oninput=()=>{
+          let v=Number(input.value);
+          if(isNaN(v)) v='';
+          if(v<0) v=0;
+          if(v>100) v=100;
+          state.scores[key]=v;
+          save();
+          colorCell(input);
+        };
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+  }
+
+  // 🔹 Guardar y cargar desde Firebase
+  function save(){
+    firebase.database().ref('scores').set(state);
+  }
+
+  function load(){
+    firebase.database().ref('scores').on('value', (snapshot)=>{
+      if(snapshot.exists()){
+        state = snapshot.val();
+      } else {
+        state = {students:[], exercises:[], scores:{}};
+      }
+      build();
+    });
+  }
+
+  // Botones y acciones
+  document.getElementById('addExercise').onclick=()=>{
+    const name=document.getElementById('newExercise').value.trim();
+    if(!name) return alert('Nombre del ejercicio requerido');
+    const zip=document.getElementById('zipLink').value.trim();
+    const prob=document.getElementById('probLink').value.trim();
+    state.exercises.push({id:uid(),name,zipLink:zip,probLink:prob});
+    save(); build();
+    document.getElementById('newExercise').value='';
+    document.getElementById('zipLink').value='';
+    document.getElementById('probLink').value='';
+  };
+
+  document.getElementById('addStudent').onclick=()=>{
+    const name=document.getElementById('newStudent').value.trim();
+    if(!name) return alert('Nombre del alumno requerido');
+    state.students.push({id:uid(),name});
+    save(); build();
+    document.getElementById('newStudent').value='';
+  };
+
+  document.getElementById('exportBtn').onclick=()=>{
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='puntajes_oia.json';
+    document.body.appendChild(a);a.click();a.remove();
+  };
+
+  document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+  document.getElementById('importFile').onchange=(e)=>{
+    const f=e.target.files[0];
+    if(!f)return;
+    const r=new FileReader();
+    r.onload=()=>{
+      state=JSON.parse(r.result);
+      save(); build();
+    };
+    r.readAsText(f);
+  };
+
+  document.getElementById('clearBtn').onclick=()=>{
+    if(confirm('¿Borrar todos los datos globales?')){
+      firebase.database().ref('scores').remove();
+    }
+  };
+
+  load();
 </script>
 
 </body>
