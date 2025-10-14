@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Olimpiada Informática CEN — Puntuaciones</title>
+<style>
+  :root{
+    --navy:#0b2340;
+    --beige:#e7dbc6;
+    --white:#ffffff;
+    --green:#b8e0b0;
+    --yellow:#fff3b0;
+    --red:#f8b4b4;
+    --muted:#f5f4ef;
+  }
+  body{
+    font-family: "Segoe UI", sans-serif;
+    background: linear-gradient(180deg,var(--muted),#fff);
+    color: var(--navy);
+    margin:0;
+    padding:20px;
+  }
+  header{
+    text-align:center;
+    margin-bottom:20px;
+  }
+  h1{
+    margin:0;
+    font-size:26px;
+    color:var(--navy);
+  }
+  table{
+    border-collapse:collapse;
+    width:100%;
+    min-width:900px;
+    background:var(--white);
+    box-shadow:0 4px 12px rgba(0,0,0,0.1);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  th,td{
+    border:1px solid #ddd;
+    padding:10px;
+    text-align:center;
+  }
+  th{
+    background:linear-gradient(180deg,var(--beige),#fefcf8);
+    color:var(--navy);
+    font-size:16px;
+  }
+  td.exercise{
+    text-align:left;
+    font-weight:bold;
+    background:#fafafa;
+  }
+  input[type="number"]{
+    width:70px;
+    padding:6px;
+    border-radius:6px;
+    border:1px solid #ccc;
+    text-align:center;
+    font-size:15px;
+  }
+  .score-0{background:var(--red)!important;}
+  .score-mid{background:var(--yellow)!important;}
+  .score-100{background:var(--green)!important;}
+  .controls{
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    flex-wrap:wrap;
+    margin-bottom:16px;
+  }
+  button{
+    background:var(--navy);
+    color:var(--white);
+    border:none;
+    border-radius:6px;
+    padding:8px 12px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  button.ghost{
+    background:transparent;
+    color:var(--navy);
+    border:1px solid var(--navy);
+  }
+  footer{
+    margin-top:30px;
+    background:var(--white);
+    padding:15px;
+    border-radius:10px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.05);
+  }
+  footer h3{margin-top:0;}
+  input[type="text"]{
+    padding:6px;
+    border-radius:6px;
+    border:1px solid #bbb;
+  }
+  .add-sections{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:center;
+    margin-top:10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Olimpiada Informática CEN — Tabla de Puntajes</h1>
+  <div class="controls">
+    <button id="exportBtn">Exportar JSON</button>
+    <button id="importBtn" class="ghost">Importar JSON</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none">
+    <button id="clearBtn" class="ghost">Reset local</button>
+  </div>
+</header>
+
+<table id="scoreTable"></table>
+
+<div class="add-sections">
+  <div>
+    <input type="text" id="newExercise" placeholder="Nombre del ejercicio">
+    <input type="text" id="zipLink" placeholder="Link .zip">
+    <input type="text" id="probLink" placeholder="Link enunciado">
+    <button id="addExercise">Agregar ejercicio</button>
+  </div>
+  <div>
+    <input type="text" id="newStudent" placeholder="Nombre del alumno">
+    <button id="addStudent">Agregar alumno</button>
+  </div>
+</div>
+
+<footer>
+  <h3>Instrucciones</h3>
+  <ul>
+    <li>Los ejercicios aparecen uno debajo del otro.</li>
+    <li>Los alumnos aparecen uno al lado del otro.</li>
+    <li>El puntaje se colorea automáticamente: rojo (0), amarillo (1–99), verde (100).</li>
+    <li>Todo se guarda automáticamente en tu navegador (localStorage).</li>
+  </ul>
+</footer>
+
+<script>
+const STORAGE_KEY = 'oia_cen_scores_transpuesto';
+let state = { students: [], exercises: [], scores: {} };
+
+function uid(){ return Math.random().toString(36).substr(2,9); }
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function load(){
+  const s = localStorage.getItem(STORAGE_KEY);
+  if(s){ state = JSON.parse(s); }
+}
+
+function colorCell(input){
+  const val = Number(input.value);
+  input.classList.remove('score-0','score-mid','score-100');
+  if(val===0) input.classList.add('score-0');
+  else if(val===100) input.classList.add('score-100');
+  else if(val>0 && val<100) input.classList.add('score-mid');
+}
+
+function build(){
+  const table=document.getElementById('scoreTable');
+  table.innerHTML='';
+  const header=document.createElement('tr');
+  header.appendChild(document.createElement('th')).textContent='Ejercicio / Alumno';
+  state.students.forEach(st=>{
+    const th=document.createElement('th');
+    th.textContent=st.name;
+    header.appendChild(th);
+  });
+  table.appendChild(header);
+
+  state.exercises.forEach(ex=>{
+    const tr=document.createElement('tr');
+    const tdName=document.createElement('td');
+    tdName.className='exercise';
+    tdName.innerHTML=`${ex.name}<br>
+      <a href="${ex.zipLink||'#'}" target="_blank">📦 Código</a> |
+      <a href="${ex.probLink||'#'}" target="_blank">📄 Enunciado</a>`;
+    tr.appendChild(tdName);
+    state.students.forEach(st=>{
+      const td=document.createElement('td');
+      const input=document.createElement('input');
+      input.type='number'; input.min=0; input.max=100;
+      const key=`${st.id}|${ex.id}`;
+      input.value=state.scores[key]??'';
+      colorCell(input);
+      input.oninput=()=>{
+        let v=Number(input.value);
+        if(isNaN(v)) v='';
+        if(v<0) v=0;
+        if(v>100) v=100;
+        state.scores[key]=v;
+        save();
+        colorCell(input);
+      };
+      td.appendChild(input);
+      tr.appendChild(td);
+    });
+    table.appendChild(tr);
+  });
+}
+
+document.getElementById('addExercise').onclick=()=>{
+  const name=document.getElementById('newExercise').value.trim();
+  if(!name) return alert('Nombre del ejercicio requerido');
+  const zip=document.getElementById('zipLink').value.trim();
+  const prob=document.getElementById('probLink').value.trim();
+  state.exercises.push({id:uid(),name,zipLink:zip,probLink:prob});
+  save(); build();
+  document.getElementById('newExercise').value='';
+  document.getElementById('zipLink').value='';
+  document.getElementById('probLink').value='';
+};
+
+document.getElementById('addStudent').onclick=()=>{
+  const name=document.getElementById('newStudent').value.trim();
+  if(!name) return alert('Nombre del alumno requerido');
+  state.students.push({id:uid(),name});
+  save(); build();
+  document.getElementById('newStudent').value='';
+};
+
+document.getElementById('exportBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='puntajes_oia.json';
+  document.body.appendChild(a);a.click();a.remove();
+};
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=(e)=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    state=JSON.parse(r.result);
+    save(); build();
+  };
+  r.readAsText(f);
+};
+document.getElementById('clearBtn').onclick=()=>{
+  if(confirm('¿Borrar todos los datos locales?')){
+    localStorage.removeItem(STORAGE_KEY);
+    state={students:[],exercises:[],scores:{}};
+    build();
+  }
+};
+
+load();
+build();
+</script>
+
+</body>
+</html>
